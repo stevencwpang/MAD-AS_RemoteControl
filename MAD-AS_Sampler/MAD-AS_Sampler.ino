@@ -24,17 +24,19 @@ void setup() {
 
   //Pin Mode Set Up
   pinMode(HC_SET,OUTPUT);
-  digitalWrite(HC_SET,LOW); //Set HC-12 to AT command mode
-  delay(20);  // Wait for the HC-12 to enter AT Command mode
-  HC12.print("AT+SLEEP");    // Send AT Command to HC-12
+  digitalWrite(HC_SET,HIGH);
+  delay(20);
+  HC12Sleep();
 }
 
 void loop() {
   //Repeatedly check command from the radio every 10 seconds, until the command is YES.
   while (WebCmd == 0){
     Serial.println("Start checking command from the radio...");
+    HC12WakeUp();
     CheckRadioCmd();
     if (WebCmd == 0){
+      HC12Sleep();
       Serial.println("No start command is given from the radio. Next check starts in 10 seconds.");
     }else{
       Serial.println("Command to start sampling is received from the radio.");
@@ -44,43 +46,50 @@ void loop() {
     Sleepy(10);
   }
   Serial.println("can start the rest of program now...");
+  HC12Sleep();
   Sleepy(0);
 }
 
 //Check command from the radio
 void CheckRadioCmd(){
-  int j;
   byte x;
-  HC12.print("AT+DEFAULT");    // Send AT Command to HC-12
-  digitalWrite(HC_SET,HIGH); //Set HC-12 to normal mode
-  delay(20);  // Wait for the HC-12 to enter normal mode
-  for (j=1;j<10000;j++){
-    x = HC12.read();
-    delay(1);
-  }
+  long StartTime = millis();
+  while( millis() - StartTime < 4000 ){
+      if(HC12.available()){
+        x=HC12.read();
+      }
+    }
   if(x==1){
     WebCmd = 1;
   }
-  digitalWrite(HC_SET,LOW); //Set HC-12 to AT command mode
-  delay(20);  // Wait for the HC-12 to enter AT Command mode
-  HC12.print("AT+SLEEP");    // Send AT Command to HC-12
 }
 
 //Respond to say the command is received
 void Respond(){
-  int i;
   Serial.println("Sending response...");
-  HC12.print("AT+DEFAULT");    // Send AT Command to HC-12
-  digitalWrite(HC_SET,HIGH); //Set HC-12 to normal mode
-  delay(20);  // Wait for the HC-12 to enter normal mode
-  for (i=1;i<10000;i++){
-    HC12.write(WebCmd);
-    delay(1);
-  }
+  long StartTime = millis();
+  while(millis() - StartTime < 4000){
+        HC12.write(WebCmd);
+    }
   Serial.println("Response sent.");
-  digitalWrite(HC_SET,LOW); //Set HC-12 to AT command mode
-  delay(20);  // Wait for the HC-12 to enter AT Command mode
-  HC12.print("AT+SLEEP");    // Send AT Command to HC-12
+}
+
+void HC12WakeUp(){
+  digitalWrite(HC_SET, LOW);
+  delay(200);
+  HC12.print("AT+DEFAULT");
+  delay(200);
+  digitalWrite(HC_SET, HIGH);
+  delay(200);
+}
+
+void HC12Sleep(){
+  digitalWrite(HC_SET, LOW);
+  delay(200);
+  HC12.print("AT+SLEEP");
+  delay(200);
+  digitalWrite(HC_SET, HIGH);
+  delay(200);
 }
 
 //Low power function

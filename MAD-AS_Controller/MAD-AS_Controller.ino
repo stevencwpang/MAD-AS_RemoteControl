@@ -22,15 +22,16 @@ volatile int WebCmd = 0; //Command from the cloud website: 0 means no sampling, 
 volatile int DeviceWakeUp = 0; //If the nearby device receives wake-up command (start sampling): 0 means no response from nearby device, 1 means response given by nearby device.
 extern volatile unsigned long timer0_millis; //millis timer variable 
 
+
 void setup() {
   Serial.begin(BAUDRATE);             // Serial port to computer
   HC12.begin(BAUDRATE);               // Serial port to HC12
 
   //Pin Mode Set Up
   pinMode(HC_SET,OUTPUT);
-  digitalWrite(HC_SET,LOW); //Set HC-12 to AT command mode
-  delay(20);  // Wait for the HC-12 to enter AT Command mode
-  HC12.print("AT+SLEEP");    // Send AT Command to HC-12
+  digitalWrite(HC_SET,HIGH);
+  delay(20);
+  HC12Sleep();   
 }
 
 void loop() {
@@ -43,14 +44,12 @@ void loop() {
       Sleepy(10);
     }else{
       Serial.println("Command to start sampling is received from the cloud.");
+      HC12WakeUp();
       WakeUp();
       if (DeviceWakeUp != 0){
-        Serial.println("The nearby device has received the command and its response is now capture.");
+        Serial.println("The nearby device has received the command and its response is now captured.");
         Serial.println("This program ends.");
-        Sleepy(0);
-      }else{
-        Serial.println("Something went wrong if you see this message!!!!!");
-        Serial.println("This program ends.");
+        HC12Sleep();
         Sleepy(0);
       }
     }
@@ -62,36 +61,50 @@ void loop() {
 //Check command from the cloud
 void CheckWebCmd(){
   ////////////////////////////////////////////
+  delay(5000);
   WebCmd = 1;
 }
 
 //Wake up the nearby device to start sampling
 void WakeUp(){
-  int i,j;
   byte x;
-  HC12.print("AT+DEFAULT");    // Send AT Command to HC-12
-  digitalWrite(HC_SET,HIGH); //Set HC-12 to normal mode
-  delay(20);  // Wait for the HC-12 to enter normal mode
   while (DeviceWakeUp == 0){
     //Send command to the nearby device for 2 seconds
     Serial.println("Sending command over radio...");
-    for (i=1;i<2000;i++){
-      HC12.write(WebCmd);
-      delay(1);
+    long StartTime = millis();
+    while(millis() - StartTime < 1000){
+        HC12.write(WebCmd);
     }
     //Listen from the nearby device for 2 seconds
     Serial.println("Listening for response over radio...");
-    for (j=1;j<2000;j++){
-      x = HC12.read();
-      delay(1);
+    StartTime = millis();
+    while( millis() - StartTime < 1000 ){
+      if(HC12.available()){
+        x=HC12.read();
+      }
     }
     if(x==1){
       DeviceWakeUp = 1;
     }
   }
-  digitalWrite(HC_SET,LOW); //Set HC-12 to AT command mode
-  delay(20);  // Wait for the HC-12 to enter AT Command mode
-  HC12.print("AT+SLEEP");    // Send AT Command to HC-12
+}
+
+void HC12WakeUp(){
+  digitalWrite(HC_SET, LOW);
+  delay(200);
+  HC12.print("AT+DEFAULT");
+  delay(200);
+  digitalWrite(HC_SET, HIGH);
+  delay(200);
+}
+
+void HC12Sleep(){
+  digitalWrite(HC_SET, LOW);
+  delay(200);
+  HC12.print("AT+SLEEP");
+  delay(200);
+  digitalWrite(HC_SET, HIGH);
+  delay(200);
 }
 
 //Low power function

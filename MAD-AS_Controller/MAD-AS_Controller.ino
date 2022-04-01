@@ -1,28 +1,44 @@
 //This program is used to check the command on the cloud website and communicate the command to the nearby device through radio modules.
 
-//Include all necessary libraries:
+//////////////////////////Include all necessary libraries//////////////////////////
 #include <SoftwareSerial.h>
 #include <avr/power.h>
 #include <LowPower.h>
 
-//Device specific config
+
+
+
+//////////////////////////////Device specific config//////////////////////////////
 #define DEVICEID "MAD-AS Testing"
 
-//For BoSL/Arduino Board
-#define BAUDRATE 9600
-#define HC_TX 7 //HC-12 TX Pin
-#define HC_RX 6 //HC-12 RX Pin
-#define HC_SET 9 //HC-12 Set Pin
 
-//SoftwareSerial
+
+
+
+//////////////////////////Define Pins on BoSL/Arduino Board//////////////////////////
+#define BAUDRATE 9600
+#define HC_TX 7               //HC-12 TX Pin
+#define HC_RX 6               //HC-12 RX Pin
+#define HC_SET 9              //HC-12 Set Pin
+
+
+
+
+//////////////////////////////////SoftwareSerial//////////////////////////////////
 SoftwareSerial HC12(HC_TX, HC_RX); //Radio Module HC-12
 
-//Variables Declaration
-volatile int WebCmd = 0; //Command from the cloud website: 0 means no sampling, 1 means start sampling.
-volatile int DeviceWakeUp = 0; //If the nearby device receives wake-up command (start sampling): 0 means no response from nearby device, 1 means response given by nearby device.
-extern volatile unsigned long timer0_millis; //millis timer variable 
 
 
+
+///////////////////////////////Variables Declaration///////////////////////////////
+volatile int WebCmd = 0;                      //Command from the cloud website: 0 means no sampling, 1 means start sampling.
+volatile int DeviceWakeUp = 0;                //If the nearby device receives wake-up command (start sampling): 0 means no response from nearby device, 1 means response given by nearby device.
+extern volatile unsigned long timer0_millis;  //millis timer variable,used for low power library
+
+
+
+
+//////////////////////////////////Setup Program//////////////////////////////////
 void setup() {
   Serial.begin(BAUDRATE);             // Serial port to computer
   HC12.begin(BAUDRATE);               // Serial port to HC12
@@ -34,6 +50,10 @@ void setup() {
   HC12Sleep();   
 }
 
+
+
+
+////////////////////////////////////Main Program////////////////////////////////////
 void loop() {
   //Repeatedly check command from the cloud every ten seconds, until the command is YES.
   while (WebCmd == 0){
@@ -58,14 +78,18 @@ void loop() {
 
 
 
-//Check command from the cloud
+
+////////////////////////////Check command from the cloud////////////////////////////
 void CheckWebCmd(){
   ////////////////////////////////////////////
   delay(5000);
   WebCmd = 1;
 }
 
-//Wake up the nearby device to start sampling
+
+
+
+///////////////////////Wake up the nearby device to start sampling///////////////////////
 void WakeUp(){
   byte x;
   while (DeviceWakeUp == 0){
@@ -89,6 +113,10 @@ void WakeUp(){
   }
 }
 
+
+
+
+///////////////////////////////HC-12 Wake-Up Function////////////////////////////////
 void HC12WakeUp(){
   digitalWrite(HC_SET, LOW);
   delay(200);
@@ -98,6 +126,10 @@ void HC12WakeUp(){
   delay(200);
 }
 
+
+
+
+///////////////////////////////HC-12 Sleep Function////////////////////////////////
 void HC12Sleep(){
   digitalWrite(HC_SET, LOW);
   delay(200);
@@ -107,7 +139,10 @@ void HC12Sleep(){
   delay(200);
 }
 
-//Low power function
+
+
+
+///////////////////////////////Low Power Function////////////////////////////////
 void Sleepy(double ScanInterval){ //Sleep Time in seconds
   //simCom.flush(); // must run before going to sleep
   Serial.flush(); // ensures that all messages have sent through serial before arduino sleeps

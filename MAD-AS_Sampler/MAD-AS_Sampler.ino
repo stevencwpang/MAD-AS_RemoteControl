@@ -25,7 +25,7 @@
 
 
 //////////////////////////For the MAS-AS Sampling Program//////////////////////////
-#define NumberOfSpins 15  
+#define NumberOfSpins 1  
 //NumberOfSpins defines the number of pump spins that the user would like to undertake in each sampling cycle. 
 //If the user would like the pump to continuously run then set to high value like 9999999.
 //If there is NO Hall effect sensor intalled, then this definition is NOT used. Use the next definition.
@@ -222,7 +222,7 @@ void HC12Sleep(){
 
 /////////////////////////////////Check command from the radio////////////////////////////////
 void CheckRadioCmd(){
-  byte x;
+  byte x = 0;
   long StartTime = millis();
   while( millis() - StartTime < 4000 ){
       if(HC12.available()){

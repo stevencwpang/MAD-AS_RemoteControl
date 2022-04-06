@@ -115,7 +115,7 @@ void CheckWebCmd(){
 
 ///////////////////////Wake up the nearby device to start sampling///////////////////////
 void WakeUp(){
-  byte x;
+  byte x = 0;
   while (DeviceWakeUp == 0){
     //Send command to the nearby device for 2 seconds
     Serial.println("Sending command over radio...");
@@ -142,6 +142,9 @@ void WakeUp(){
 
 ///////////////////////////////HC-12 Wake-Up Function////////////////////////////////
 void HC12WakeUp(){
+  simCom.flush();
+  simCom.end();
+  HC12.listen();
   digitalWrite(HC_SET, LOW);
   delay(200);
   HC12.print("AT+DEFAULT");
@@ -160,7 +163,10 @@ void HC12Sleep(){
   HC12.print("AT+SLEEP");
   delay(200);
   digitalWrite(HC_SET, HIGH);
-  delay(200);
+  delay(200);  
+  HC12.flush();
+  HC12.end();
+  simCom.listen();
 }
 
 
@@ -284,15 +290,7 @@ void Transmit(){
       WebCmd = VariableData.toInt();
     }
 
-    Serial.print(F("My Response: "));
-    Serial.println(MyResponse);
-    delay(100);
-
-    Serial.print(F("VariableData: "));
-    Serial.println(VariableData);
-    delay(100);
-
-    Serial.print(F("Sampler mode: "));
+    Serial.print(F("Sampling Command: "));
     Serial.println(WebCmd);
     delay(100);
     

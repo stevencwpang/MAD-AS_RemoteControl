@@ -5,6 +5,7 @@
 #include <avr/power.h>
 #include <LowPower.h>
 #include <MCP7940.h>
+#include <EEPROM.h>
 
 
 
@@ -71,6 +72,9 @@ long TimeTakenToSpinMe;     //time taken to spin
 double DelayTime;           //delay time used only when there is NO hall effect sensor
 double HallWakeSig;         //wake-up hall effect sensor signal
 int ScanCheck = 0;          //used to check if the number of sampling is reached
+uint16_t CycleCounter;      //number of cycles the MAD-AS has performed
+uint16_t zero = 0;          //used to reset cycle counter
+String RadioMsgBuffer = ""; //message to send through HC12 radio
 
 //variables for MCP7940 RTC
 enum alarmTypes {
@@ -102,6 +106,20 @@ void setup() {
   Serial.begin(BAUDRATE);             // Serial port to computer
   HC12.begin(BAUDRATE);               // Serial port to HC12
 
+
+  /////////Use serial monitor to reset the cycle counter/////////
+  Serial.println(F("Enter 'R' to reset the cycle counter."));
+  delay(2000);
+  if (Serial.available()){
+    uint8_t command = Serial.read();
+    if(command = 'R'){
+      EEPROM.put(0,zero);
+    }
+  }
+  Serial.print(F("Number of cycles peformed before this restart: "));
+  EEPROM.get(0,CycleCounter);
+  Serial.println(CycleCounter);
+  
 
   ///////////////////////Pin Mode Set Up///////////////////////
   pinMode(MotorPowerPin, OUTPUT);
@@ -172,6 +190,26 @@ void loop() {
     //Print to the serial information about the time it took to conduct the required number of rotations.
     Serial.print("TimeTakenToSpin=");
     Serial.println(TimeTakenToSpinMe);
+    
+    //Add 1 to the cycle counter
+    EEPROM.get(0,CycleCounter);
+    CycleCounter = CycleCounter + 1;
+    EEPROM.put(0, CycleCounter);
+
+    //Send message out if radio communication is used
+    if (ActivationMethod == 2){
+      RadioMsgBuffer = "C" + String(CycleCounter);
+      RadioMsgBuffer = RadioMsgBuffer + "E";
+      HC12WakeUp();
+      Serial.println("Sending radio message...");
+      long StartTime = millis();
+      while(millis() - StartTime < 4000){  
+        HC12.print(RadioMsgBuffer);
+      }
+      HC12Sleep();
+      Serial.println("Message sent.");
+      RadioMsgBuffer = "";
+    }
     
     attachInterrupt(digitalPinToInterrupt(interruptPin), Scan, LOW);
   }

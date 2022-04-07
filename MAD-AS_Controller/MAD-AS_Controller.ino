@@ -39,9 +39,10 @@ SoftwareSerial HC12(HC_TX, HC_RX);                            //Radio Module HC-
 ///////////////////////////////Variables Declaration///////////////////////////////
 volatile int WebCmd = 0;                      //Command from the cloud website: 0 means no sampling, 1 means start sampling.
 volatile int DeviceWakeUp = 0;                //If the nearby device receives wake-up command (start sampling): 0 means no response from nearby device, 1 means response given by nearby device.
-volatile int CYCLE = 1;
-volatile int RESTART = 2;
-volatile int ACTIVATION = 3;
+int SendOrNot = 0;                            //Send data to the cloud or not.
+int CycleCounter = -1;                        //Number of Cycles the MAD-AS device has performed.
+byte incomingByte;                            //Incoming Byte over the radio
+String RadioMsgBuffer = "";                   //Message received over radio after MAD-AS starts sampling. 
 extern volatile unsigned long timer0_millis;  //millis timer variable,used for low power library
 char response[CHARBUFF];                      //sim7000 serial response buffer
 String dataStr;                               //Transmit URL
@@ -63,6 +64,7 @@ void setup() {
   delay(20);
   HC12Sleep();
   simOff();
+  Serial.println("The controller program has been set up.");
 }
 
 
@@ -70,7 +72,7 @@ void setup() {
 
 ////////////////////////////////////Main Program////////////////////////////////////
 void loop() {
-  //Repeatedly check command from the cloud every ten seconds, until the command is YES.
+  //Repeatedly check command from the cloud every 30 seconds, until the command is YES.
   while (WebCmd == 0){
     Serial.println("Start checking command from the cloud...");
     CheckWebCmd();
@@ -83,11 +85,28 @@ void loop() {
       WakeUp();
       if (DeviceWakeUp != 0){
         Serial.println("The nearby device has received the command and its response is now captured.");
-        Serial.println("This program ends.");
         HC12Sleep();
-        Sleepy(0);
       }
     }
+  }
+  while (WebCmd == 1){  //Turn on the radio and listen for message from the MAD-AS device, send message to the cloud if message is heard.
+    Serial.println("Turning on radio to hear from the nearby MAD-AS device.");
+    HC12WakeUp();
+    HC12Listen();
+    HC12Sleep();
+    CheckMsgBuffer();
+    Serial.print("Number of cycles is ");
+    Serial.println(CycleCounter);
+    if (SendOrNot == 1){
+      Serial.println("Sending cycle number to the cloud...");
+      delay(5000);
+      simOn();
+      Transmit();
+      simOff();
+      Serial.println("Done!");
+      SendOrNot = 0;
+    }
+    RadioMsgBuffer = "";
   }
 }
 
@@ -149,6 +168,9 @@ void HC12WakeUp(){
   delay(200);
   HC12.print("AT+DEFAULT");
   delay(200);
+  while(HC12.available()){
+    HC12.read();
+  }
   digitalWrite(HC_SET, HIGH);
   delay(200);
 }
@@ -162,11 +184,47 @@ void HC12Sleep(){
   delay(200);
   HC12.print("AT+SLEEP");
   delay(200);
+  while(HC12.available()){
+    HC12.read();
+  }
   digitalWrite(HC_SET, HIGH);
   delay(200);  
   HC12.flush();
   HC12.end();
   simCom.listen();
+}
+
+
+
+
+///////////////////////////////Listen for HC-12 when MAD-AS is sampling///////////////////////////////
+void HC12Listen(){
+  long StartTime = millis();
+  Serial.println("Listening for message over radio...");
+  while( RadioMsgBuffer.length() < 15){
+    if(HC12.available()){
+      incomingByte = HC12.read();
+      RadioMsgBuffer += char(incomingByte);
+    }
+  }
+}
+
+
+
+
+void CheckMsgBuffer(){
+  int indexOfC = RadioMsgBuffer.indexOf('C');
+  int indexOfE = RadioMsgBuffer.indexOf('E',indexOfC);
+  if (indexOfC == -1){
+    Serial.println("No message from the nearby MAD-AS device.");
+  }else{
+    int indexOfNumber;
+    String TempCycleCounter = "";
+    indexOfNumber = indexOfC + 1;
+    TempCycleCounter = RadioMsgBuffer.substring(indexOfNumber,indexOfE);
+    CycleCounter = TempCycleCounter.toInt();
+    SendOrNot = 1;
+  }
 }
 
 
@@ -233,11 +291,11 @@ void Transmit(){
     dataStr += SITEID;
     dataStr += ".csv";
     dataStr += "&T=";
-    dataStr += CYCLE;
+    dataStr += CycleCounter;
     dataStr += "&EC=";
-    dataStr += RESTART;
+    dataStr += CycleCounter;
     dataStr += "&D=";
-    dataStr += ACTIVATION;
+    dataStr += CycleCounter;
     dataStr += "\"";
     
     netReg();

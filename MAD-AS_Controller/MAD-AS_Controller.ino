@@ -37,16 +37,29 @@ SoftwareSerial HC12(HC_TX, HC_RX);                            //Radio Module HC-
 
 
 ///////////////////////////////Variables Declaration///////////////////////////////
-volatile int WebCmd = 0;                      //Command from the cloud website: 0 means no sampling, 1 means start sampling.
-volatile int DeviceWakeUp = 0;                //If the nearby device receives wake-up command (start sampling): 0 means no response from nearby device, 1 means response given by nearby device.
-int SendOrNot = 0;                            //Send data to the cloud or not.
-int CycleCounter = -1;                        //Number of Cycles the MAD-AS device has performed.
-byte incomingByte;                            //Incoming Byte over the radio
-String RadioMsgBuffer = "";                   //Message received over radio after MAD-AS starts sampling. 
-extern volatile unsigned long timer0_millis;  //millis timer variable,used for low power library
-char response[CHARBUFF];                      //sim7000 serial response buffer
-String dataStr;                               //Transmit URL
+volatile int WebCmd = 0;                      
+//Command from the cloud website: 0 means no sampling, 1 means start sampling, 2 means stop sampling.
+volatile int DeviceWakeUp = 0;                
+//If the nearby device receives wake-up command (start sampling): 0 means no response from nearby device, 1 means response given by nearby device.
+int SendOrNot = 0;                           
+ //Send data to the cloud or not.
+int CycleCounter = -1;                        
+//Number of Cycles the MAD-AS device has performed. Positive numbers mean the real cycle counter. -1 means the MAD-AS is waiting for start command, 
+//-2 means the MAD-AS stops sampling according to the stop command, -3 means the controller cannot hear from the sampler and time-out is triggered. 
+int SleepForever = 0;                         
+//Used in the mechanism which makes the controller sleep forever: 0 means no, 1 means the controller will sleep forever.
+byte incomingByte;                            
+//Incoming Byte over the radio
+String RadioMsgBuffer = "";                   
+//Message received over radio after MAD-AS starts sampling. 
+extern volatile unsigned long timer0_millis;  
+//millis timer variable,used for low power library
+char response[CHARBUFF];                      
+//sim7000 serial response buffer
+String dataStr;                               
+//Transmit URL
 int SIM_count = 0;
+//I am not sure what does this mean? -----------------------------canwei
 
 
 
@@ -72,8 +85,8 @@ void setup() {
 
 ////////////////////////////////////Main Program////////////////////////////////////
 void loop() {
-  //Repeatedly check command from the cloud every 30 seconds, until the command is YES.
-  while (WebCmd == 0){
+  while (WebCmd == 0 & SleepForever == 0){
+    //Repeatedly check command from the cloud every 30 seconds, until the command is YES.
     Serial.println("Start checking command from the cloud...");
     CheckWebCmd();
     if (WebCmd == 0){
@@ -89,7 +102,9 @@ void loop() {
       }
     }
   }
-  while (WebCmd == 1){  //Turn on the radio and listen for message from the MAD-AS device, send message to the cloud if message is heard.
+
+  while (WebCmd == 1 & SleepForever == 0){  
+    //Turn on the radio and listen for message from the MAD-AS device, send message to the cloud if message is heard.
     Serial.println("Turning on radio to hear from the nearby MAD-AS device.");
     HC12WakeUp();
     HC12Listen();
@@ -107,6 +122,25 @@ void loop() {
       SendOrNot = 0;
     }
     RadioMsgBuffer = "";
+  }
+
+  while (WebCmd == 2 & SleepForever == 0){
+    //Ask the MAD-AS Sampler to stop sampling.
+    Serial.println("Asking MAD-AS Sampler to stop sampling...");
+    StopSampling();
+    Serial.println("The nearby MAD-AS Sampler has stopped sampling.");
+  }
+
+  while (SleepForever == 1){
+    //MAD-AS controller will sleep forever, after sending the last message to the cloud (to tell the reason).
+    Serial.println("This MAD-AS Controller is set to sleep forever soon.");
+    Serial.println("Sending the last message...");
+    delay(5000);
+    simOn();
+    Transmit();
+    simOff();
+    Serial.println("Goodbye!");
+    Sleepy(0);
   }
 }
 
@@ -136,13 +170,13 @@ void CheckWebCmd(){
 void WakeUp(){
   byte x = 0;
   while (DeviceWakeUp == 0){
-    //Send command to the nearby device for 2 seconds
+    //Send command to the nearby device for 1 seconds
     Serial.println("Sending command over radio...");
     long StartTime = millis();
     while(millis() - StartTime < 1000){
         HC12.write(WebCmd);
     }
-    //Listen from the nearby device for 2 seconds
+    //Listen from the nearby device for 1 seconds
     Serial.println("Listening for response over radio...");
     StartTime = millis();
     while( millis() - StartTime < 1000 ){
@@ -201,17 +235,55 @@ void HC12Sleep(){
 void HC12Listen(){
   long StartTime = millis();
   Serial.println("Listening for message over radio...");
-  while( RadioMsgBuffer.length() < 15){
+  while( RadioMsgBuffer.length() < 15 & millis() - StartTime < 7200000){
     if(HC12.available()){
       incomingByte = HC12.read();
       RadioMsgBuffer += char(incomingByte);
     }
+  }
+  if(millis() - StartTime >= 7200000){
+    //stop listening if no signal is detected in 2 hours
+    Serial.println("No radio signal is received for 2 hours. This device will turn off soon.");
+    CycleCounter = -3;
+    SleepForever = 1;    
   }
 }
 
 
 
 
+///////////////////////////////Ask to stop sampling over HC-12///////////////////////////
+void StopSampling(){
+  HC12WakeUp();
+  byte x = 0;
+  while (DeviceWakeUp == 1){
+    //Send command to the nearby device for 1 seconds
+    Serial.println("Sending command over radio...");
+    long StartTime = millis();
+    while(millis() - StartTime < 1000){
+        HC12.write(WebCmd);
+    }
+    //Listen from the nearby device for 1 seconds
+    Serial.println("Listening for response over radio...");
+    StartTime = millis();
+    while( millis() - StartTime < 1000 ){
+      if(HC12.available()){
+        x=HC12.read();
+      }
+    }
+    if(x==2){
+      DeviceWakeUp = 0;
+      CycleCounter = -2;
+      SleepForever = 1;
+    }
+  }
+  HC12Sleep();
+}
+
+
+
+
+/////////////////////////////Extract information from the message buffer//////////////////////////
 void CheckMsgBuffer(){
   int indexOfC = RadioMsgBuffer.indexOf('C');
   int indexOfE = RadioMsgBuffer.indexOf('E',indexOfC);

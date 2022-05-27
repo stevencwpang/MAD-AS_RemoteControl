@@ -26,7 +26,7 @@
 
 
 //////////////////////////For the MAS-AS Sampling Program//////////////////////////
-#define NumberOfSpins 1  
+#define NumberOfSpins 20  
 //NumberOfSpins defines the number of pump spins that the user would like to undertake in each sampling cycle. 
 //If the user would like the pump to continuously run then set to high value like 9999999.
 //If there is NO Hall effect sensor intalled, then this definition is NOT used. Use the next definition.
@@ -35,10 +35,10 @@
 //DurationOfPumping is only used when there is NO Hall effect sensor. 
 //It defines the duration of pumping that occurs each time the pump turns on, in seconds.
 
-#define PumpEveryXMins 1
+#define PumpEveryXMins 15
 //PumpEveryXMins defines how often the pump is turned on, in minutes. 
 
-#define DurationOfRun 60
+#define DurationOfRun 144000
 //DurationOfRun defines the total duration of the sampling, in minutes.
 //e.g. if we run the pump for a day, it will be 1440 minutes.
 
@@ -172,6 +172,21 @@ void loop() {
     Serial.print(F("Scan Check: "));
     Serial.println(ScanCheck);
     
+    //Check any further command (stop sampling command) if radio communication is used
+    if (ActivationMethod == 2){
+      Serial.println("Start checking command from the radio...");
+      HC12WakeUp();
+      CheckRadioCmd();
+      if (WebCmd == 2){
+      Serial.println("Command to stop sampling is received from the radio, sending response...");
+      Respond();
+      HC12Sleep();
+      Serial.println("MAD-AS Sampler now starts sleeping forever.");
+      Sleepy(0); //Sleep forever
+      }
+      HC12Sleep();
+    }
+
     SetAlarm();   //set the alarm of next operation
     
     //Spin the pump the desired number of spins ["NumberOfSpins"] and record the time it took to do so. 
@@ -194,7 +209,7 @@ void loop() {
     //Add 1 to the cycle counter
     EEPROM.get(0,CycleCounter);
     CycleCounter = CycleCounter + 1;
-    EEPROM.put(0, CycleCounter);
+    EEPROM.put(0,CycleCounter);
 
     //Send message out if radio communication is used
     if (ActivationMethod == 2){
@@ -270,6 +285,9 @@ void CheckRadioCmd(){
   if(x==1){
     WebCmd = 1;
   }
+  if(x==2){
+    WebCmd = 2;
+  }
 }
 
 
@@ -327,8 +345,8 @@ void ActivateByRadioCommand(){
       HC12Sleep();
       break;
     }
-    Sleepy(10);
-  } //Repeatedly check command from the radio every 10 seconds, until the command is YES.
+    Sleepy(30);
+  } //Repeatedly check command from the radio every 30 seconds, until the command is YES.
 }
 
 

@@ -44,8 +44,10 @@ volatile int DeviceWakeUp = 0;
 int SendOrNot = 0;                           
  //Send data to the cloud or not.
 int CycleCounter = -1;                        
-//Number of Cycles the MAD-AS device has performed. Positive numbers mean the real cycle counter. -1 means the MAD-AS is waiting for start command, 
-//-2 means the MAD-AS stops sampling according to the stop command, -3 means the controller cannot hear from the sampler and time-out is triggered. 
+//Number of Cycles the MAD-AS device has performed. 
+int ErrorCode = -1;
+//0 means normal, -1 means the MAD-AS is waiting for start command, -2 means the MAD-AS stops sampling according to the stop command, 
+//-3 and -4 means the controller cannot hear from the sampler and time-out is triggered (-3: during sampling stage, -4: during waking-up stage).
 int SleepForever = 0;                         
 //Used in the mechanism which makes the controller sleep forever: 0 means no, 1 means the controller will sleep forever.
 byte incomingByte;                            
@@ -169,7 +171,8 @@ void CheckWebCmd(){
 ///////////////////////Wake up the nearby device to start sampling///////////////////////
 void WakeUp(){
   byte x = 0;
-  while (DeviceWakeUp == 0){
+  byte i = 0;
+  while (DeviceWakeUp == 0 & i < 3600){
     //Send command to the nearby device for 1 seconds
     Serial.println("Sending command over radio...");
     long StartTime = millis();
@@ -186,7 +189,15 @@ void WakeUp(){
     }
     if(x==1){
       DeviceWakeUp = 1;
+      ErrorCode = 1;
     }
+    i = i + 1;
+  }
+  if (DeviceWakeUp = 0 & i >= 3600){
+    //stop listening if no handshake is done in 2 hours.
+    Serial.println("No radio signal is received for 2 hours. This device will turn off soon.");
+    ErrorCode = -4;
+    SleepForever = 1;
   }
 }
 
@@ -244,7 +255,7 @@ void HC12Listen(){
   if(millis() - StartTime >= 7200000){
     //stop listening if no signal is detected in 2 hours
     Serial.println("No radio signal is received for 2 hours. This device will turn off soon.");
-    CycleCounter = -3;
+    ErrorCode = -3;
     SleepForever = 1;    
   }
 }
@@ -273,7 +284,7 @@ void StopSampling(){
     }
     if(x==2){
       DeviceWakeUp = 0;
-      CycleCounter = -2;
+      ErrorCode = -2;
       SleepForever = 1;
     }
   }
@@ -367,7 +378,7 @@ void Transmit(){
     dataStr += "&EC=";
     dataStr += CycleCounter;
     dataStr += "&D=";
-    dataStr += CycleCounter;
+    dataStr += ErrorCode;
     dataStr += "\"";
     
     netReg();

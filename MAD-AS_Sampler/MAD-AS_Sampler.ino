@@ -338,7 +338,7 @@ void ActivateByRadioCommand(){
     CheckRadioCmd();
     if (WebCmd == 0){
       HC12Sleep();
-      Serial.println("No start command is given from the radio. Next check starts in 10 seconds.");
+      Serial.println("No start command is given from the radio. Next check starts in 30 seconds.");
     }else{
       Serial.println("Command to start sampling is received from the radio, sending response...");
       Respond();

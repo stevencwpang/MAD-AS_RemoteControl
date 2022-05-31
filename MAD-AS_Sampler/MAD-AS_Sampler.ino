@@ -160,7 +160,7 @@ void setup() {
   else{
   }
   
-  Serial.println("Sampling program starts now.");
+  Serial.println(F("Sampling program starts now."));
 }
 
 
@@ -174,14 +174,14 @@ void loop() {
     
     //Check any further command (stop sampling command) if radio communication is used
     if (ActivationMethod == 2){
-      Serial.println("Start checking command from the radio...");
+      Serial.println(F("Start checking command from the radio..."));
       HC12WakeUp();
       CheckRadioCmd();
       if (WebCmd == 2){
-      Serial.println("Command to stop sampling is received from the radio, sending response...");
+      Serial.println(F("Command to stop sampling is received from the radio, sending response..."));
       Respond();
       HC12Sleep();
-      Serial.println("MAD-AS Sampler now starts sleeping forever.");
+      Serial.println(F("MAD-AS Sampler now starts sleeping forever."));
       Sleepy(0); //Sleep forever
       }
       HC12Sleep();
@@ -203,7 +203,7 @@ void loop() {
     //digitalWrite(MotorPowerPin,LOW);
     
     //Print to the serial information about the time it took to conduct the required number of rotations.
-    Serial.print("TimeTakenToSpin=");
+    Serial.print(F("TimeTakenToSpin="));
     Serial.println(TimeTakenToSpinMe);
     
     //Add 1 to the cycle counter
@@ -216,13 +216,13 @@ void loop() {
       RadioMsgBuffer = "C" + String(CycleCounter);
       RadioMsgBuffer = RadioMsgBuffer + "E";
       HC12WakeUp();
-      Serial.println("Sending radio message...");
+      Serial.println(F("Sending radio message..."));
       long StartTime = millis();
       while(millis() - StartTime < 4000){  
         HC12.print(RadioMsgBuffer);
       }
       HC12Sleep();
-      Serial.println("Message sent.");
+      Serial.println(F("Message sent."));
       RadioMsgBuffer = "";
     }
     
@@ -295,12 +295,12 @@ void CheckRadioCmd(){
 
 /////////////////////////////Respond to say the command is received/////////////////////////////
 void Respond(){
-  Serial.println("Sending response...");
+  Serial.println(F("Sending response..."));
   long StartTime = millis();
   while(millis() - StartTime < 4000){
         HC12.write(WebCmd);
     }
-  Serial.println("Response sent.");
+  Serial.println(F("Response sent."));
 }
 
 
@@ -312,10 +312,10 @@ void ActivateByHallEffectSensor(){
   do {
     //turn on pin!
     Sleepy(10);
-    Serial.print("Wake run. ");
+    Serial.print(F("Wake run. "));
     digitalWrite(WakePwrPin,HIGH);
 
-    Serial.print("Wake Sig: ");
+    Serial.print(F("Wake Sig: "));
     HallWakeSig = analogRead(WakeSigPin);
     HallWakeSig = HallWakeSig + analogRead(WakeSigPin);
     HallWakeSig = HallWakeSig + analogRead(WakeSigPin);
@@ -333,14 +333,14 @@ void ActivateByHallEffectSensor(){
 ////////////////////////////////Activate by Radio Command////////////////////////////////
 void ActivateByRadioCommand(){
   while (WebCmd == 0){
-    Serial.println("Start checking command from the radio...");
+    Serial.println(F("Start checking command from the radio..."));
     HC12WakeUp();
     CheckRadioCmd();
     if (WebCmd == 0){
       HC12Sleep();
-      Serial.println("No start command is given from the radio. Next check starts in 30 seconds.");
+      Serial.println(F("No start command is given from the radio. Next check starts in 30 seconds."));
     }else{
-      Serial.println("Command to start sampling is received from the radio, sending response...");
+      Serial.println(F("Command to start sampling is received from the radio, sending response..."));
       Respond();
       HC12Sleep();
       break;
@@ -358,7 +358,7 @@ void GetMinsMaxs(){
    //These values are then used to determine cut off thresholds during the main program. 
    //This function is only called once, when the unit powers on.
    
-   Serial.println("Calibrating peristaltic pump sensor");   
+   Serial.println(F("Calibrating peristaltic pump sensor"));   
    digitalWrite(MotorPowerPin,HIGH);      //turn motor on
    digitalWrite(HallPwrPin,HIGH);         //turn hall effect sensor on
 
@@ -394,7 +394,7 @@ void GetMinsMaxs(){
 
    delay(2000);                       //delay for 2000 milliseconds
    SpinMe(2);                         //spin the motor twice to initiate the sampler
-   Serial.println("Finished calibrating peristaltic pump sensor");
+   Serial.println(F("Finished calibrating peristaltic pump sensor"));
    delay(3000);
 }
 
@@ -425,7 +425,7 @@ long SpinMe(int SpinTimes){
       SpinCounter = SpinCounter + 1;
       //print the number of spins and the strength [in percentage] out to serial
       Serial.print(SpinCounter);
-      Serial.print(": ");
+      Serial.print(F(": "));
       Serial.println(MagneticStrength);
  
       abcd: //a point in the code to return to - NB this should be changed to a while or do loop
@@ -482,7 +482,7 @@ void SetAlarm() {
   DateTime now = MCP7940.now();  // get the current time
   int nowminute = now.minute();
   int FIRST_INTERVAL = int(PumpEveryXMins); 
-  Serial.print("Setting alarm 1 to go off at ");
+  Serial.print(F("Setting alarm 1 to go off at "));
   now = now + TimeSpan(0, 0, FIRST_INTERVAL, 0);  // Add interval to current time
   sprintf(inputBuffer, "%04d-%02d-%02d %02d:%02d:%02d", now.year(), now.month(), now.day(),
           now.hour(), now.minute(), now.second());

@@ -43,9 +43,9 @@ volatile int DeviceWakeUp = 0;
 //If the nearby device receives wake-up command (start sampling): 0 means no response from nearby device, 1 means response given by nearby device.
 int SendOrNot = 0;                           
  //Send data to the cloud or not.
-int CycleCounter = -1;                        
+int CycleCounter = -1;  String CycleCounterTemp;                     
 //Number of Cycles the MAD-AS device has performed. 
-int ErrorCode = -1;
+int ErrorCode = -1; String ErrorCodeTemp;
 //0 means normal, -1 means the MAD-AS is waiting for start command, -2 means the MAD-AS stops sampling according to the stop command, 
 //-3 and -4 means the controller cannot hear from the sampler and time-out is triggered (-3: during sampling stage, -4: during waking-up stage).
 int SleepForever = 0;                         
@@ -79,7 +79,7 @@ void setup() {
   delay(20);
   HC12Sleep();
   simOff();
-  Serial.println("The controller program has been set up.");
+  Serial.println(F("The controller program has been set up."));
 }
 
 
@@ -89,17 +89,17 @@ void setup() {
 void loop() {
   while (WebCmd == 0 & SleepForever == 0){
     //Repeatedly check command from the cloud every 30 seconds, until the command is YES.
-    Serial.println("Start checking command from the cloud...");
+    Serial.println(F("Start checking command from the cloud..."));
     CheckWebCmd();
     if (WebCmd == 0){
-      Serial.println("No start command is given from the cloud. Next check starts in 30 seconds.");
+      Serial.println(F("No start command is given from the cloud. Next check starts in 30 seconds."));
       Sleepy(30);
     }else{
-      Serial.println("Command to start sampling is received from the cloud.");
+      Serial.println(F("Command to start sampling is received from the cloud."));
       HC12WakeUp();
       WakeUp();
       if (DeviceWakeUp != 0){
-        Serial.println("The nearby device has received the command and its response is now captured.");
+        Serial.println(F("The nearby device has received the command and its response is now captured."));
         HC12Sleep();
       }
     }
@@ -107,20 +107,20 @@ void loop() {
 
   while (WebCmd == 1 & SleepForever == 0){  
     //Turn on the radio and listen for message from the MAD-AS device, send message to the cloud if message is heard.
-    Serial.println("Turning on radio to hear from the nearby MAD-AS device.");
+    Serial.println(F("Turning on radio to hear from the nearby MAD-AS device."));
     HC12WakeUp();
     HC12Listen();
     HC12Sleep();
     CheckMsgBuffer();
-    Serial.print("Number of cycles is ");
+    Serial.print(F("Number of cycles is "));
     Serial.println(CycleCounter);
     if (SendOrNot == 1){
-      Serial.println("Sending cycle number to the cloud...");
+      Serial.println(F("Sending cycle number to the cloud..."));
       delay(5000);
       simOn();
       Transmit();
       simOff();
-      Serial.println("Done!");
+      Serial.println(F("Done!"));
       SendOrNot = 0;
     }
     RadioMsgBuffer = "";
@@ -128,20 +128,20 @@ void loop() {
 
   while (WebCmd == 2 & SleepForever == 0){
     //Ask the MAD-AS Sampler to stop sampling.
-    Serial.println("Asking MAD-AS Sampler to stop sampling...");
+    Serial.println(F("Asking MAD-AS Sampler to stop sampling..."));
     StopSampling();
-    Serial.println("The nearby MAD-AS Sampler has stopped sampling.");
+    Serial.println(F("The nearby MAD-AS Sampler has stopped sampling."));
   }
 
   while (SleepForever == 1){
     //MAD-AS controller will sleep forever, after sending the last message to the cloud (to tell the reason).
-    Serial.println("This MAD-AS Controller is set to sleep forever soon.");
-    Serial.println("Sending the last message...");
+    Serial.println(F("This MAD-AS Controller is set to sleep forever soon."));
+    Serial.println(F("Sending the last message..."));
     delay(5000);
     simOn();
     Transmit();
     simOff();
-    Serial.println("Goodbye!");
+    Serial.println(F("Goodbye!"));
     Sleepy(0);
   }
 }
@@ -174,13 +174,13 @@ void WakeUp(){
   byte i = 0;
   while (DeviceWakeUp == 0 & i < 3600){
     //Send command to the nearby device for 1 seconds
-    Serial.println("Sending command over radio...");
+    Serial.println(F("Sending command over radio..."));
     long StartTime = millis();
     while(millis() - StartTime < 1000){
         HC12.write(WebCmd);
     }
     //Listen from the nearby device for 1 seconds
-    Serial.println("Listening for response over radio...");
+    Serial.println(F("Listening for response over radio..."));
     StartTime = millis();
     while( millis() - StartTime < 1000 ){
       if(HC12.available()){
@@ -195,7 +195,7 @@ void WakeUp(){
   }
   if (DeviceWakeUp = 0 & i >= 3600){
     //stop listening if no handshake is done in 2 hours.
-    Serial.println("No radio signal is received for 2 hours. This device will turn off soon.");
+    Serial.println(F("No radio signal is received for 2 hours. This device will turn off soon."));
     ErrorCode = -4;
     SleepForever = 1;
   }
@@ -245,7 +245,7 @@ void HC12Sleep(){
 ///////////////////////////////Listen for HC-12 when MAD-AS is sampling///////////////////////////////
 void HC12Listen(){
   long StartTime = millis();
-  Serial.println("Listening for message over radio...");
+  Serial.println(F("Listening for message over radio..."));
   while( RadioMsgBuffer.length() < 15 & millis() - StartTime < 7200000){
     if(HC12.available()){
       incomingByte = HC12.read();
@@ -254,7 +254,7 @@ void HC12Listen(){
   }
   if(millis() - StartTime >= 7200000){
     //stop listening if no signal is detected in 2 hours
-    Serial.println("No radio signal is received for 2 hours. This device will turn off soon.");
+    Serial.println(F("No radio signal is received for 2 hours. This device will turn off soon."));
     ErrorCode = -3;
     SleepForever = 1;    
   }
@@ -269,13 +269,13 @@ void StopSampling(){
   byte x = 0;
   while (DeviceWakeUp == 1){
     //Send command to the nearby device for 1 seconds
-    Serial.println("Sending command over radio...");
+    Serial.println(F("Sending command over radio..."));
     long StartTime = millis();
     while(millis() - StartTime < 1000){
         HC12.write(WebCmd);
     }
     //Listen from the nearby device for 1 seconds
-    Serial.println("Listening for response over radio...");
+    Serial.println(F("Listening for response over radio..."));
     StartTime = millis();
     while( millis() - StartTime < 1000 ){
       if(HC12.available()){
@@ -299,7 +299,7 @@ void CheckMsgBuffer(){
   int indexOfC = RadioMsgBuffer.indexOf('C');
   int indexOfE = RadioMsgBuffer.indexOf('E',indexOfC);
   if (indexOfC == -1){
-    Serial.println("No message from the nearby MAD-AS device.");
+    Serial.println(F("No message from the nearby MAD-AS device."));
   }else{
     int indexOfNumber;
     String TempCycleCounter = "";
@@ -368,17 +368,18 @@ void netUnreg(){
 void Transmit(){
 
     String MyResponse;
+    CycleCounterTemp = CycleCounter;
+    ErrorCodeTemp = ErrorCode;
     
     dataStr = "AT+HTTPPARA=\"URL\",\"www.bosl.com.au/IoT/LMP/scripts/WriteMe.php?SiteName=";
-
     dataStr += SITEID;
     dataStr += ".csv";
     dataStr += "&T=";
-    dataStr += CycleCounter;
+    dataStr += CycleCounterTemp;
     dataStr += "&EC=";
-    dataStr += CycleCounter;
+    dataStr += CycleCounterTemp;
     dataStr += "&D=";
-    dataStr += ErrorCode;
+    dataStr += ErrorCodeTemp;
     dataStr += "\"";
     
     netReg();
@@ -389,7 +390,7 @@ void Transmit(){
         sendATcmd(F("AT+CSTT?"), "OK",1000);   
         if (strstr(response, "mdata.net.au") != NULL){
             //this means the cstt has been set, so no need to set again!
-            Serial.println("CSTT already set to APN ...no need to set again");
+            Serial.println(F("CSTT already set to APN ...no need to set again"));
        } else {
             sendATcmd(F("AT+CSTT=\"mdata.net.au\""), "OK",1000);
         }

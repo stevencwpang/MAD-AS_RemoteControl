@@ -169,6 +169,8 @@ void setup() {
 ////////////////////////////////////Main Program////////////////////////////////////
 void loop() {
   if (ScanCheck < (DurationOfRun/PumpEveryXMins)){
+    SetAlarm();   //set the alarm of next operation
+    
     Serial.print(F("Scan Check: "));
     Serial.println(ScanCheck);
     
@@ -187,7 +189,6 @@ void loop() {
       HC12Sleep();
     }
 
-    SetAlarm();   //set the alarm of next operation
     
     //Spin the pump the desired number of spins ["NumberOfSpins"] and record the time it took to do so. 
     //If there is no Hall effect sensor, then this line is commented out.

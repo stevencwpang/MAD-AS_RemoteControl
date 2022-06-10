@@ -88,12 +88,12 @@ void setup() {
 ////////////////////////////////////Main Program////////////////////////////////////
 void loop() {
   while (WebCmd == 0 & SleepForever == 0){
-    //Repeatedly check command from the cloud every 30 seconds, until the command is YES.
+    //Repeatedly check command from the cloud every 6 minutes, until the command is YES.
     Serial.println(F("Start checking command from the cloud..."));
     CheckWebCmd();
     if (WebCmd == 0){
       Serial.println(F("No start command is given from the cloud. Next check starts in 30 seconds."));
-      Sleepy(30);
+      Sleepy(330);
     }else{
       Serial.println(F("Command to start sampling is received from the cloud."));
       HC12WakeUp();

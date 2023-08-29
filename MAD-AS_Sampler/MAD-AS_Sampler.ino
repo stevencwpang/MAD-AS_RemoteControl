@@ -1,82 +1,62 @@
-////
-
-//////////////////////////Include all necessary libraries//////////////////////////
+//__________________________________________________________________________________________
+// Include all libraries required to run this program
 #include <SoftwareSerial.h>
 #include <avr/power.h>
 #include <LowPower.h>
 #include <MCP7940.h>
 #include <EEPROM.h>
 
-
-
-
-//////////////////////////Define Pins on BoSL/Arduino Board//////////////////////////
+//__________________________________________________________________________________________
+// microBoSL board pin definition
 #define BAUDRATE 9600
-#define HC_TX 10        //HC-12 TX Pin
-#define HC_RX 11        //HC-12 RX Pin
-#define HC_SET 13       //HC-12 Set Pin
+//#define HC_TX 10        //HC-12 TX Pin
+//#define HC_RX 11        //HC-12 RX Pin
+//#define HC_SET 13       //HC-12 Set Pin
 #define HallPwrPin 6    //Hall effect sensor Power Pin
 #define HallSigPin A0   //Hall effect sensor Signal Pin
 #define WakePwrPin 5    //Wake-up hall effect sensor Power Pin
 #define WakeSigPin A2   //Wake-up hall effect sensor Signal Pin
 #define MotorPowerPin 9 //The pin used to switch the MOSFET to power the motor
-#define interruptPin 2  //attach interrupt pin of the RTC
+#define interruptPin 2  //Attach interrupt pin of the RTC alarm
 
+//__________________________________________________________________________________________
+// Configure here: sampling program set-up
+#define NumberOfSpins 30        // NumberOfSpins defines the number of pump spins that the user would like to undertake in each sampling cycle. 
+                                // If the user would like the pump to continuously run then set to high value like 9999999.
+                                // If there is NO Hall effect sensor intalled, then this definition is NOT used. Use the next definition.
 
+//#define DurationOfPumping 10  // DurationOfPumping is only used when there is NO Hall effect sensor. 
+                                // It defines the duration of pumping that occurs each time the pump turns on, in seconds.
 
+#define PumpEveryXMins 5        // PumpEveryXMins defines how often the pump is turned on, in minutes. 
 
-//////////////////////////For the MAS-AS Sampling Program//////////////////////////
-#define NumberOfSpins 20  
-//NumberOfSpins defines the number of pump spins that the user would like to undertake in each sampling cycle. 
-//If the user would like the pump to continuously run then set to high value like 9999999.
-//If there is NO Hall effect sensor intalled, then this definition is NOT used. Use the next definition.
+#define DurationOfRun 2880      // DurationOfRun defines the total duration of the sampling, in minutes.
+                                // e.g. if we run the pump for a day, it will be 1440 minutes.
 
-//#define DurationOfPumping 10
-//DurationOfPumping is only used when there is NO Hall effect sensor. 
-//It defines the duration of pumping that occurs each time the pump turns on, in seconds.
+#define ActivationMethod 0      // 0: sampling starts immediate after calibration; 1: activate program by the Wake-up hall effect sensor; 2: activate program by radio command (not finished).
 
-#define PumpEveryXMins 15
-//PumpEveryXMins defines how often the pump is turned on, in minutes. 
+#define triggering_threshold 30 // Triggering_threshold declares the triggering threshold of Wake-up hall effect sensor. Adjust based on the types of hall effect sensor.
+                                // You usually do not need to modify this value.
 
-#define DurationOfRun 144000
-//DurationOfRun defines the total duration of the sampling, in minutes.
-//e.g. if we run the pump for a day, it will be 1440 minutes.
+//__________________________________________________________________________________________
+// SoftwareSerial set-up
+//SoftwareSerial HC12(HC_TX, HC_RX);    //Radio Module HC-12 
 
-#define ActivationMethod 2
-//0: sampling starts immediate after calibration; 1: activate program by hall effect sensor; 2: activate program by radio command.
-
-int triggering_threshold = 30;
-//Triggering_threshold declares the triggering threshold of hall effect sensor.
-//Adjust based on the types of hall effect sensor.
-
-
-
-
-//////////////////////////////////SoftwareSerial//////////////////////////////////
-SoftwareSerial HC12(HC_TX, HC_RX);    //Radio Module HC-12
-
-
-
-
-///////////////////////////////Variables Declaration///////////////////////////////
-//other variables
+//__________________________________________________________________________________________
+// Variables declaration
 volatile int WebCmd = 0;                      //Command from the cloud website: 0 means no sampling, 1 means start sampling.
 extern volatile unsigned long timer0_millis;  //millis timer variable,used for low power library
 const uint8_t  SPRINTF_BUFFER_SIZE = 32;      //Buffer size for sprintf(), used for MCP7940 RTC
-
-//variables for the MAD-AS program
 double MinVal,MaxVal;       //for hall effect sensor calibration
 double MagneticStrength;    //magnetic strength detected by the hall effect sensor
 long i,SpinCounter;         //counter for motor spins
 long TimeTakenToSpinMe;     //time taken to spin
 double DelayTime;           //delay time used only when there is NO hall effect sensor
 double HallWakeSig;         //wake-up hall effect sensor signal
-int ScanCheck = 0;          //used to check if the number of sampling is reached
+int ScanCheck = 1;          //used to check if the number of sampling is reached
 uint16_t CycleCounter;      //number of cycles the MAD-AS has performed
 uint16_t zero = 0;          //used to reset cycle counter
 String RadioMsgBuffer = ""; //message to send through HC12 radio
-
-//variables for MCP7940 RTC
 enum alarmTypes {
   matchSeconds,
   matchMinutes,
@@ -90,51 +70,51 @@ enum alarmTypes {
 };
 MCP7940_Class MCP7940;                           // Create an instance of the MCP7940
 char          inputBuffer[SPRINTF_BUFFER_SIZE];  // Buffer for sprintf()/sscanf()
-//gobal variables for RTC module,make sure you check this each time when you try to use the MADAS
-int yr = 2020;
-int mth = 1;
-int dy = 1;
-int hr = 00;
-int mn = 00;
-int sc = 00;
+int yr = 2020; int mth = 1; int dy = 1; int hr = 00; int mn = 00; int sc = 00; // Date and time variables
 
-
-
-
-//////////////////////////////////Setup Program//////////////////////////////////
+//__________________________________________________________________________________________
+// Initialise and set up the sampling program
 void setup() {
   Serial.begin(BAUDRATE);             // Serial port to computer
-  HC12.begin(BAUDRATE);               // Serial port to HC12
+//  if (ActivationMethod == 2){
+//    HC12.begin(BAUDRATE);               // Serial port to HC12
+//  }
 
-
-  /////////Use serial monitor to reset the cycle counter/////////
+  // Use serial monitor to reset the cycle counter
+//  Serial.println(F("----------- Device ID: N00 -----------"));
   Serial.println(F("Enter 'R' to reset the cycle counter."));
-  delay(2000);
+  delay(3000);
   if (Serial.available()){
     uint8_t command = Serial.read();
     if(command = 'R'){
       EEPROM.put(0,zero);
+      Serial.println(F("The cycle counter has been reset."));
+    }
+    else{
+      Serial.println(F("The cyele counter is not reset."));
     }
   }
-  Serial.print(F("Number of cycles peformed before this restart: "));
+  Serial.print(F("Number of cycles performed before this restart: "));
   EEPROM.get(0,CycleCounter);
   Serial.println(CycleCounter);
   
 
-  ///////////////////////Pin Mode Set Up///////////////////////
+  // Pin mode set up
   pinMode(MotorPowerPin, OUTPUT);
   pinMode(HallPwrPin, OUTPUT);
   pinMode(WakePwrPin, OUTPUT);
-  digitalWrite(HallPwrPin,LOW);         //turn off hall effect sensor
-  pinMode(interruptPin, INPUT_PULLUP);  //attach interrupt pin
-  pinMode(HC_SET,OUTPUT);
-  digitalWrite(HC_SET,HIGH);
-  delay(20);
-  HC12Sleep();                          //switch HC-12 to low power mode
-  GetMinsMaxs();                        //calibrate the hall effect sensor and comment off this line if NO hall effect sensor is used
+  digitalWrite(HallPwrPin,LOW);digitalWrite(WakePwrPin,LOW);                  //turn off hall effect sensor
+  pinMode(interruptPin, INPUT_PULLUP);                                        //attach interrupt pin for the RTC alarm
+//  if (ActivationMethod == 2){
+//    pinMode(HC_SET,OUTPUT);
+//    digitalWrite(HC_SET,HIGH);
+//    delay(20);
+//    HC12Sleep();                                                                //switch HC-12 to low power mode
+//  }
+  GetMinsMaxs();                                                              //calibrate the hall effect sensor and comment off this line if NO hall effect sensor is used
 
 
-  //////////////////Initialize the RTC module//////////////////
+  // Initialize the Real-Time Clock module to ensure the precise smapling intervals
   while (!MCP7940.begin()) {                                                  // Initialize RTC communications
         Serial.println(F("Unable to find MCP7940N. Checking again in 3s."));  // Show error text
         delay(3000);                                                          // wait three seconds
@@ -150,44 +130,46 @@ void setup() {
   SetClock();       //Set the clock of the RTC
 
 
-  //////////////////MAD-AS Wating for Activation//////////////////
+  //MAD-AS waiting for activation
   if (ActivationMethod == 1){
+    Serial.println(F("The device now starts to detect the triggering magnet every 10 seconds."));
     ActivateByHallEffectSensor(); //Activate by Hall Effect Senor
   }
   else if (ActivationMethod == 2){
-    ActivateByRadioCommand();     //Activate by Radio Command
+//    Serial.println(F("The device now starts to listen for the radio command."));
+//    ActivateByRadioCommand();     //Activate by Radio Command
   }
   else{
+    Serial.println(F("The device is set to start sampling program immediately."));
   }
   
-  Serial.println(F("Sampling program starts now."));
+  Serial.println(F("The sampling program starts now."));
 }
 
-
-
-
-////////////////////////////////////Main Program////////////////////////////////////
+//__________________________________________________________________________________________
+// Main sampling program - loop until the end of DurationofRun
 void loop() {
-  if (ScanCheck < (DurationOfRun/PumpEveryXMins)){
+  if (ScanCheck <= (DurationOfRun/PumpEveryXMins)){
     SetAlarm();   //set the alarm of next operation
     
     Serial.print(F("Scan Check: "));
     Serial.println(ScanCheck);
     
     //Check any further command (stop sampling command) if radio communication is used
-    if (ActivationMethod == 2){
-      Serial.println(F("Start checking command from the radio..."));
-      HC12WakeUp();
-      CheckRadioCmd();
-      if (WebCmd == 2){
-      Serial.println(F("Command to stop sampling is received from the radio, sending response..."));
-      Respond();
-      HC12Sleep();
-      Serial.println(F("MAD-AS Sampler now starts sleeping forever."));
-      Sleepy(0); //Sleep forever
-      }
-      HC12Sleep();
-    }
+//    if (ActivationMethod == 2){
+//      Serial.println(F("Start checking command from the radio..."));
+//      HC12WakeUp();
+//      CheckRadioCmd();
+//      if (WebCmd == 0 || WebCmd == 2){
+//      Serial.println(F("Command to stop sampling is received from the radio, sending back the response..."));
+//      Respond();
+//      HC12Sleep();
+//      Serial.println(F("The MAD-AS device now starts sleeping forever."));
+//      Sleepy(0); //Sleep forever
+//      }
+//      HC12Sleep();
+//      Serial.println(F("No command is found. Sampling program continues."));
+//    }
 
     
     //Spin the pump the desired number of spins ["NumberOfSpins"] and record the time it took to do so. 
@@ -213,101 +195,86 @@ void loop() {
     EEPROM.put(0,CycleCounter);
 
     //Send message out if radio communication is used
-    if (ActivationMethod == 2){
-      RadioMsgBuffer = "C" + String(CycleCounter);
-      RadioMsgBuffer = RadioMsgBuffer + "E";
-      HC12WakeUp();
-      Serial.println(F("Sending radio message..."));
-      long StartTime = millis();
-      while(millis() - StartTime < 4000){  
-        HC12.print(RadioMsgBuffer);
-      }
-      HC12Sleep();
-      Serial.println(F("Message sent."));
-      RadioMsgBuffer = "";
-    }
+//    if (ActivationMethod == 2){
+//      RadioMsgBuffer = "C" + String(CycleCounter);
+//      RadioMsgBuffer = RadioMsgBuffer + "E";
+//      HC12WakeUp();
+//      Serial.println(F("Sending radio message..."));
+//      long StartTime = millis();
+//      while(millis() - StartTime < 4000){  
+//        HC12.print(RadioMsgBuffer);
+//      }
+//      HC12Sleep();
+//      Serial.println(F("Message sent."));
+//      RadioMsgBuffer = "";
+//    }
     
+    Serial.println(F("This sampling cycle is finished."));
     attachInterrupt(digitalPinToInterrupt(interruptPin), Scan, LOW);
   }
   else{
-    Serial.println(F("Program ended"));
+    Serial.println(F("Sampling program ended."));
   }
   
   Sleepy(0); //Sleep until next trigger. Set to 0 for sleeping forever. 
 }
 
-
-
-
-///////////////////////////////////Scan Function///////////////////////////////////
+//__________________________________________________________________________________________
+// Looped in attachInterrupt (trigger from the RTC alarm)
 void Scan(){
   ScanCheck++;
   detachInterrupt(digitalPinToInterrupt(interruptPin));
 }
 
 
+//__________________________________________________________________________________________
+// HC-12 Wake-Up Function
+//void HC12WakeUp(){
+//  digitalWrite(HC_SET, LOW);
+//  delay(200);
+//  HC12.print("AT+DEFAULT");
+//  delay(200);
+//  digitalWrite(HC_SET, HIGH);
+//  delay(200);
+//}
 
+//__________________________________________________________________________________________
+// HC-12 Sleep Function
+//void HC12Sleep(){
+//  digitalWrite(HC_SET, LOW);
+//  delay(200);
+//  HC12.print("AT+SLEEP");
+//  delay(200);
+//  digitalWrite(HC_SET, HIGH);
+//  delay(200);
+//}
 
-///////////////////////////////HC-12 Wake-Up Function////////////////////////////////
-void HC12WakeUp(){
-  digitalWrite(HC_SET, LOW);
-  delay(200);
-  HC12.print("AT+DEFAULT");
-  delay(200);
-  digitalWrite(HC_SET, HIGH);
-  delay(200);
-}
+//__________________________________________________________________________________________
+// Check command from the radio
+//void CheckRadioCmd(){
+//  byte x = 0;
+//  long StartTime = millis();
+//  while( millis() - StartTime < 4000 ){
+//      if(HC12.available()){
+//        x=HC12.read();
+//      }
+//      WebCmd=x;
+//    }
+//}
 
+//__________________________________________________________________________________________
+// Respond to say the command is received
+//void Respond(){
+//  Serial.println(F("Sending response..."));
+//  long StartTime = millis();
+//  while(millis() - StartTime < 4000){
+//        HC12.write(WebCmd);
+//    }
+//  Serial.println(F("Response sent."));
+//}
 
-
-
-///////////////////////////////HC-12 Sleep Function////////////////////////////////
-void HC12Sleep(){
-  digitalWrite(HC_SET, LOW);
-  delay(200);
-  HC12.print("AT+SLEEP");
-  delay(200);
-  digitalWrite(HC_SET, HIGH);
-  delay(200);
-}
-
-
-
-
-/////////////////////////////////Check command from the radio////////////////////////////////
-void CheckRadioCmd(){
-  byte x = 0;
-  long StartTime = millis();
-  while( millis() - StartTime < 4000 ){
-      if(HC12.available()){
-        x=HC12.read();
-      }
-    }
-  if(x==1){
-    WebCmd = 1;
-  }
-  if(x==2){
-    WebCmd = 2;
-  }
-}
-
-
-
-
-/////////////////////////////Respond to say the command is received/////////////////////////////
-void Respond(){
-  Serial.println(F("Sending response..."));
-  long StartTime = millis();
-  while(millis() - StartTime < 4000){
-        HC12.write(WebCmd);
-    }
-  Serial.println(F("Response sent."));
-}
-
-
-
-
-/////////////////////////////////Activate by Hall Effect Senor/////////////////////////////////
+//__________________________________________________________________________________________
+// Activation Method 1: activate by Wake-up Hall Effect Senor
 void ActivateByHallEffectSensor(){
   //This function is used to detect the external magnet which will activate the sampling program.
   do {
@@ -315,12 +282,13 @@ void ActivateByHallEffectSensor(){
     Sleepy(10);
     Serial.print(F("Wake run. "));
     digitalWrite(WakePwrPin,HIGH);
-
     Serial.print(F("Wake Sig: "));
     HallWakeSig = analogRead(WakeSigPin);
     HallWakeSig = HallWakeSig + analogRead(WakeSigPin);
     HallWakeSig = HallWakeSig + analogRead(WakeSigPin);
-    HallWakeSig = HallWakeSig / 3;
+    HallWakeSig = HallWakeSig + analogRead(WakeSigPin);
+    HallWakeSig = HallWakeSig + analogRead(WakeSigPin);
+    HallWakeSig = HallWakeSig / 5;
     HallWakeSig = sqrt((HallWakeSig - 512.0)*(HallWakeSig - 512.0)) / (1024)*100;
     Serial.println(HallWakeSig); 
     digitalWrite(WakePwrPin,LOW);
@@ -328,38 +296,39 @@ void ActivateByHallEffectSensor(){
   } while (HallWakeSig < triggering_threshold);
 }
 
+//__________________________________________________________________________________________
+// Activation Method 2: activate by Radio Command
+//void ActivateByRadioCommand(){
+//  while (WebCmd != 1 && WebCmd != 2){
+//    Serial.println(F("Start checking command from the radio..."));
+//    HC12WakeUp();
+//    CheckRadioCmd();
+//    if (WebCmd != 1 && WebCmd != 2){
+//      HC12Sleep();
+//      Serial.println(F("No start command is given from the radio. Next check starts in 30 seconds."));
+//    }else{
+//      if (WebCmd == 1){Serial.println(F("Command to start sampling is received from the radio, sending back the response..."));}
+//      if (WebCmd == 2){Serial.println(F("Command to sleep forever is received from the radio, sending back the response..."));}
+//      Respond();
+//      HC12Sleep();
+//      if (WebCmd == 2){
+//      Serial.println(F("The MAD-AS device now starts sleeping forever."));
+//      Sleepy(0); //Sleep forever
+//      }
+//      break;
+//    }
+//    Sleepy(30);
+//  } //Repeatedly check command from the radio every 30 seconds, until the command is YES.
+//}
 
-
-
-////////////////////////////////Activate by Radio Command////////////////////////////////
-void ActivateByRadioCommand(){
-  while (WebCmd == 0){
-    Serial.println(F("Start checking command from the radio..."));
-    HC12WakeUp();
-    CheckRadioCmd();
-    if (WebCmd == 0){
-      HC12Sleep();
-      Serial.println(F("No start command is given from the radio. Next check starts in 30 seconds."));
-    }else{
-      Serial.println(F("Command to start sampling is received from the radio, sending response..."));
-      Respond();
-      HC12Sleep();
-      break;
-    }
-    Sleepy(30);
-  } //Repeatedly check command from the radio every 30 seconds, until the command is YES.
-}
-
-
-
-
-///////////////////////////////Hall Effect Sensor Calibration////////////////////////////////
+//__________________________________________________________________________________________
+// Hall Effect Sensor calibration for precise spin
 void GetMinsMaxs(){
    //This function gets the maximum and minimum values for the hall effect sensor in its current environment as the motor spins around. 
    //These values are then used to determine cut off thresholds during the main program. 
    //This function is only called once, when the unit powers on.
    
-   Serial.println(F("Calibrating peristaltic pump sensor"));   
+   Serial.println(F("Calibrating peristaltic pump..."));   
    digitalWrite(MotorPowerPin,HIGH);      //turn motor on
    digitalWrite(HallPwrPin,HIGH);         //turn hall effect sensor on
 
@@ -392,17 +361,15 @@ void GetMinsMaxs(){
    //Serial.println(MinVal);
    digitalWrite(MotorPowerPin,LOW);   //turn motor off
    digitalWrite(HallPwrPin,LOW);      //turn hall effect sensor off
-
+   Serial.println(F("Finished calibrating peristaltic pump."));
    delay(2000);                       //delay for 2000 milliseconds
+   Serial.println(F("The MAD-AS device is initiated. Check if the pump spins twice."));
    SpinMe(2);                         //spin the motor twice to initiate the sampler
-   Serial.println(F("Finished calibrating peristaltic pump sensor"));
    delay(3000);
 }
 
-
-
-
-///////////////////////////////Program for FAL Pump Operation////////////////////////////////
+//__________________________________________________________________________________________
+// Program for pump operation
 long SpinMe(int SpinTimes){
   //This function spins the pump for the desired number of rotations, in this instance an integer value refered to as SpinTimes, sent by the calling function.
 
@@ -454,14 +421,12 @@ long SpinMe(int SpinTimes){
   return millis() - StartTime;        //return the time [in milliseconds] it took to conduct these spins
 }
 
-
-
-
-///////////////////////////////MCP7940 RTC Set Clock////////////////////////////////
+//__________________________________________________________________________________________
+// MCP7940 RTC Set Clock
 void SetClock() {
-  Serial.println(F("Setting MCP7940M to date/time of library compile"));
+  Serial.println(F("Setting MCP7940M to date and time as programmed..."));
   MCP7940.adjust(DateTime(yr,mth,dy,hr,mn,sc));                                                 //set to library compile Date/Time
-  Serial.print(F("Date/Time set to "));
+  Serial.print(F("Date and time is set to "));
   DateTime now = MCP7940.now();                                                                 //get the current time
   sprintf(inputBuffer, "%04d-%02d-%02d %02d:%02d:%02d", now.year(), now.month(), now.day(),
           now.hour(), now.minute(), now.second());                                              //use sprintf() to pretty print date/time with leading zeroes
@@ -475,10 +440,8 @@ void SetClock() {
   }
 }
 
-
-
-
-///////////////////////////////MCP7940 RTC Set Alarm////////////////////////////////
+//__________________________________________________________________________________________
+// MCP7940 RTC Set Alarm
 void SetAlarm() {
   DateTime now = MCP7940.now();  // get the current time
   int nowminute = now.minute();
@@ -492,10 +455,8 @@ void SetAlarm() {
   delay(10);
 }
 
-
-
-
-///////////////////////////////Low Power Function////////////////////////////////
+//__________________________________________________________________________________________
+// Low Power Function
 void Sleepy(double ScanInterval){ //Sleep Time in seconds
   //simCom.flush(); // must run before going to sleep
   Serial.flush(); // ensures that all messages have sent through serial before arduino sleeps

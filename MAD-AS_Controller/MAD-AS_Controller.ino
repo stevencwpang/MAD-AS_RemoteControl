@@ -87,25 +87,26 @@ void setup() {
 
 ////////////////////////////////////Main Program////////////////////////////////////
 void loop() {
-  while (WebCmd == 0 & SleepForever == 0){
+  while (WebCmd == 0 && DeviceWakeUp == 0 && SleepForever == 0){
     //Repeatedly check command from the cloud every 6 minutes, until the command is YES.
     Serial.println(F("Start checking command from the cloud..."));
     CheckWebCmd();
-    if (WebCmd == 0){
+    if (WebCmd != 1 && WebCmd != 2){ //Command 0 or any other number will be treated as no sampling command.
       Serial.println(F("No start command is given from the cloud. Next check starts in 30 seconds."));
-      Sleepy(330);
+      Sleepy(30);
     }else{
-      Serial.println(F("Command to start sampling is received from the cloud."));
+      if (WebCmd == 1){Serial.println(F("Command to start sampling is received from the cloud."));}
+      if (WebCmd == 2){Serial.println(F("Command to sleep forever is received from the cloud."));}
       HC12WakeUp();
       WakeUp();
-      if (DeviceWakeUp != 0){
+      HC12Sleep();
+      if (DeviceWakeUp == 1){
         Serial.println(F("The nearby device has received the command and its response is now captured."));
-        HC12Sleep();
       }
     }
   }
 
-  while (WebCmd == 1 & SleepForever == 0){  
+  while (WebCmd == 1 && DeviceWakeUp == 1 && SleepForever == 0){  
     //Turn on the radio and listen for message from the MAD-AS device, send message to the cloud if message is heard.
     Serial.println(F("Turning on radio to hear from the nearby MAD-AS device."));
     HC12WakeUp();
@@ -126,7 +127,7 @@ void loop() {
     RadioMsgBuffer = "";
   }
 
-  while (WebCmd == 2 & SleepForever == 0){
+  while ((WebCmd == 0 || WebCmd == 2) && DeviceWakeUp == 1 && SleepForever == 0){
     //Ask the MAD-AS Sampler to stop sampling.
     Serial.println(F("Asking MAD-AS Sampler to stop sampling..."));
     StopSampling();
@@ -172,7 +173,7 @@ void CheckWebCmd(){
 void WakeUp(){
   byte x = 0;
   byte i = 0;
-  while (DeviceWakeUp == 0 & i < 3600){
+  while (DeviceWakeUp == 0 && i < 4){
     //Send command to the nearby device for 1 seconds
     Serial.println(F("Sending command over radio..."));
     long StartTime = millis();
@@ -187,13 +188,18 @@ void WakeUp(){
         x=HC12.read();
       }
     }
-    if(x==1){
+    if(x == 1){
       DeviceWakeUp = 1;
       ErrorCode = 1;
     }
-    i = i + 1;
+    if(x == 2){
+      DeviceWakeUp = 1;
+      ErrorCode = -2;
+      SleepForever = 1;
+    }
+    i = i + 1; // i = 1800 = 1 hour
   }
-  if (DeviceWakeUp = 0 & i >= 3600){
+  if (DeviceWakeUp == 0 && i >= 4){
     //stop listening if no handshake is done in 2 hours.
     Serial.println(F("No radio signal is received for 2 hours. This device will turn off soon."));
     ErrorCode = -4;
@@ -246,7 +252,7 @@ void HC12Sleep(){
 void HC12Listen(){
   long StartTime = millis();
   Serial.println(F("Listening for message over radio..."));
-  while( RadioMsgBuffer.length() < 15 & millis() - StartTime < 7200000){
+  while( RadioMsgBuffer.length() < 15 && millis() - StartTime < 7200000){
     if(HC12.available()){
       incomingByte = HC12.read();
       RadioMsgBuffer += char(incomingByte);
@@ -266,7 +272,7 @@ void HC12Listen(){
 ///////////////////////////////Ask to stop sampling over HC-12///////////////////////////
 void StopSampling(){
   HC12WakeUp();
-  byte x = 0;
+  byte x = -1;
   while (DeviceWakeUp == 1){
     //Send command to the nearby device for 1 seconds
     Serial.println(F("Sending command over radio..."));
@@ -282,7 +288,7 @@ void StopSampling(){
         x=HC12.read();
       }
     }
-    if(x==2){
+    if(x==0 || x==2){
       DeviceWakeUp = 0;
       ErrorCode = -2;
       SleepForever = 1;

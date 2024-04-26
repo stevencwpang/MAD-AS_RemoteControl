@@ -45,6 +45,8 @@ int SendOrNot = 0;
  //Send data to the cloud or not.
 int CycleCounter = -1;  String CycleCounterTemp;                     
 //Number of Cycles the MAD-AS device has performed. 
+int CmdRecCounter = 0; String CmdRecCounterTemp;
+//Number of Commands receieved by MAD-AS controller. This is uesed to understand where does the lost of communication happen.
 int ErrorCode = -1; String ErrorCodeTemp;
 //0 means normal, -1 means the MAD-AS is waiting for start command, -2 means the MAD-AS stops sampling according to the stop command, 
 //-3 and -4 means the controller cannot hear from the sampler and time-out is triggered (-3: during sampling stage, -4: during waking-up stage).
@@ -92,8 +94,8 @@ void loop() {
     Serial.println(F("Start checking command from the cloud..."));
     CheckWebCmd();
     if (WebCmd != 1 && WebCmd != 2){ //Command 0 or any other number will be treated as no sampling command.
-      Serial.println(F("No start command is given from the cloud. Next check starts in 30 seconds."));
-      Sleepy(30);
+      Serial.println(F("No start command is given from the cloud. Next check starts in 600 seconds."));
+      Sleepy(600);
     }else{
       if (WebCmd == 1){Serial.println(F("Command to start sampling is received from the cloud."));}
       if (WebCmd == 2){Serial.println(F("Command to sleep forever is received from the cloud."));}
@@ -173,7 +175,7 @@ void CheckWebCmd(){
 void WakeUp(){
   byte x = 0;
   byte i = 0;
-  while (DeviceWakeUp == 0 && i < 4){
+  while (DeviceWakeUp == 0 && i < 3600){
     //Send command to the nearby device for 1 seconds
     Serial.println(F("Sending command over radio..."));
     long StartTime = millis();
@@ -199,7 +201,7 @@ void WakeUp(){
     }
     i = i + 1; // i = 1800 = 1 hour
   }
-  if (DeviceWakeUp == 0 && i >= 4){
+  if (DeviceWakeUp == 0 && i >= 3600){
     //stop listening if no handshake is done in 2 hours.
     Serial.println(F("No radio signal is received for 2 hours. This device will turn off soon."));
     ErrorCode = -4;
@@ -313,6 +315,7 @@ void CheckMsgBuffer(){
     TempCycleCounter = RadioMsgBuffer.substring(indexOfNumber,indexOfE);
     CycleCounter = TempCycleCounter.toInt();
     SendOrNot = 1;
+    CmdRecCounter = CmdRecCounter + 1;
   }
 }
 
@@ -376,6 +379,7 @@ void Transmit(){
     String MyResponse;
     CycleCounterTemp = CycleCounter;
     ErrorCodeTemp = ErrorCode;
+    CmdRecCounterTemp = CmdRecCounter;
     
     dataStr = "AT+HTTPPARA=\"URL\",\"www.bosl.com.au/IoT/LMP/scripts/WriteMe.php?SiteName=";
     dataStr += SITEID;
@@ -383,31 +387,19 @@ void Transmit(){
     dataStr += "&T=";
     dataStr += CycleCounterTemp;
     dataStr += "&EC=";
-    dataStr += CycleCounterTemp;
-    dataStr += "&D=";
     dataStr += ErrorCodeTemp;
+    dataStr += "&D=";
+    dataStr += CmdRecCounterTemp;
     dataStr += "\"";
-    
+
     netReg();
-    
-    
-    ///***check logic
-   //set CSTT - if it is already set, then no need to do again...
-        sendATcmd(F("AT+CSTT?"), "OK",1000);   
-        if (strstr(response, "mdata.net.au") != NULL){
-            //this means the cstt has been set, so no need to set again!
-            Serial.println(F("CSTT already set to APN ...no need to set again"));
-       } else {
-            sendATcmd(F("AT+CSTT=\"mdata.net.au\""), "OK",1000);
-        }
-    
-    
     //close open bearer
     sendATcmd(F("AT+SAPBR=2,1"), "OK",1000);
     if (strstr(response, "1,1") == NULL){
         if (strstr(response, "1,3") == NULL){
         sendATcmd(F("AT+SAPBR=0,1"), "OK",1000);
         }
+        sendATcmd(F("AT+SAPBR=3,1,\"APN\",\"simbase\""), "OK",1000); //set bearer apn
         sendATcmd(F("AT+SAPBR=1,1"), "OK",1000);
     }
     
@@ -449,16 +441,14 @@ void Transmit(){
 
 ////////////////////////////register to network////////////////////////////
 void netReg(){
-    sendATcmd(F("AT+CFUN=0"), "OK", 1000);
-    
-    if(sendATcmd(F("AT+CFUN=1"), "+CPIN: READY", 1000) == 0){
-        sendATcmd(F("AT+CFUN=6"), "OK", 10000);
-        xDelay(10000);
-        
-        sendATcmd(F("AT+CFUN=1"), "OK", 1000);
-    }
-    xDelay(2000);
-    sendATcmd(F("AT+CREG?"), "+CREG: 0,1", 2000);
+     sendATcmd(F("AT+CFUN=1"), "OK", 1000);//enable the modem
+   
+     xDelay(2000);
+     sendATcmd(F("AT+CGDCONT=1,\"IP\",\"simbase\""), "OK", 2000);//set IPv4 and apn
+     if(sendATcmd(F("AT+CREG?"), "+CREG: 0,5", 2000) == 0){//check that modem is registered as roaming
+         sendATcmd(F("AT+COPS=1,2,50501"), "OK",50000); //register to telstra network
+         sendATcmd(F("AT+CREG?"), "+CREG: 0,5", 2000); //check that modem is registered as roaming
+     }
 }
 
 
